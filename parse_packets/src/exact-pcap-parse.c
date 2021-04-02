@@ -72,7 +72,10 @@ int read_expect(int fd, void* buff, ssize_t len, int64_t* offset, FILE* csv_fd)
         ssize_t bytes = read(fd, (char*)buff + total_bytes, len - total_bytes);
         if(bytes == 0){
             ch_log_error("Reached end of file\n");
-            if (csv_fd) fwrite(fmtd, n, 1, csv_fd);
+            if (csv_fd) {
+            	fwrite(fmtd, n, 1, csv_fd);
+	        n=0;
+	    }
             return 1;
         }
         total_bytes += bytes;
@@ -88,7 +91,7 @@ int read_expect(int fd, void* buff, ssize_t len, int64_t* offset, FILE* csv_fd)
 inline void my_putchar(char c, FILE* f) {
     fmtd[n++] = c;
     // Is the buffer full?
-    if (n == CHUNK_SIZE) {
+    if (n >= CHUNK_SIZE) {
         fwrite(fmtd, n, 1, f);
         n = 0;
     }
@@ -117,6 +120,33 @@ inline void my_puthex(uint8_t c, FILE* f) {
     }
 }
 
+void my_add_float(int64_t nb, int* count, char* temp) {
+        if (nb <= 9) {
+                //ch_log_error("write to %i", 12-(*count));
+                int i = 11 - (*count);
+        	temp[i] = (nb + 48);
+        }
+        else {
+                my_add_float(nb % 10, count, temp);
+                (*count)++;
+                my_add_float(nb / 10, count, temp);
+        }
+}
+
+void my_put_float(int64_t nb, FILE* f) {
+	char temp[12];
+        for (int i = 0; i<12; i++) {
+        	temp[i] = '0';
+        }
+        //ch_log_error("init temp");
+        int count = 0;
+        my_add_float(nb, &count, temp);
+        for (int i = 0; i<12; i++) {
+                //ch_log_error("write temp %i", i);
+                my_putchar(temp[i], f);
+        }
+}
+
 void my_put_nbr(int64_t nb, FILE* f) {
 	if (nb < 0) {
     		my_putchar('-', f);
@@ -133,7 +163,7 @@ void dprint_packet(/*int fd*/FILE* f, bool expcap, pcap_pkthdr_t* pkt_hdr, char*
                   bool nl, bool content, int total_out, int64_t timedelta_ns)
 {
     //char fmtd[4096] = {0};
-
+   //ch_log_error("what");
     //int n = 0;
    expcap_pktftr_t* pkt_ftr = (expcap_pktftr_t*)((char*)(packet)
                 + pkt_hdr->caplen - sizeof(expcap_pktftr_t));
@@ -149,7 +179,7 @@ void dprint_packet(/*int fd*/FILE* f, bool expcap, pcap_pkthdr_t* pkt_hdr, char*
    my_putchar(',', f);
    my_put_nbr((int64_t)pkt_ftr->ts_secs, f);
    my_putchar('.', f);
-   my_put_nbr((int64_t)pkt_ftr->ts_psecs, f);
+   my_put_float((int64_t)pkt_ftr->ts_psecs, f);
    my_putchar(',', f);
 
 
@@ -211,16 +241,7 @@ void dprint_packet(/*int fd*/FILE* f, bool expcap, pcap_pkthdr_t* pkt_hdr, char*
     }*/
     
     /* fprintf(f, "%s",fmtd); */
-    /*if (content && options.num != 0) {
-        int n = 0;
-	if (options.num < 0) {
-	    options.num = INT64_MAX;
-	}
-	for (int64_t i = 0; i < MIN((int64_t)pkt_hdr->caplen, options.num); i++) {
-	    fprintf(f,"%02x", *((uint8_t*)packet + i));
-	}
-
-    }*/
+    
     if(nl){
         fmtd[n++] = '\n';
         //n += fprintf(f, "\n");
@@ -403,12 +424,7 @@ int main(int argc, char** argv)
             dprint_packet(stdout, expcap, &pkt_hdr, pbuf, true, true, total_out, time_delta );
         }
         
-        //char payload_start[150] = {0};
-        //int p_n = 0;
-
-        //for(int64_t i = 0; i < 60; i++){
-        //    p_n += snprintf(payload_start + p_n, 150 - p_n, "%02x", *((uint8_t*)pbuf +i));
-        //}
+        
         if(csv_fd > 0 /*&& check_udp_tcp(payload_start)*/){
             dprint_packet(csv_fd, expcap, &pkt_hdr, pbuf, true, true, total_out, time_delta);
         }
@@ -419,7 +435,10 @@ int main(int argc, char** argv)
 
     }
 
-    if(csv_fd) fwrite(fmtd, n, 1, csv_fd);
+    if(csv_fd) { 
+        fwrite(fmtd, n, 1, csv_fd);
+        n = 0;
+    }
 
 
     close(fd);
