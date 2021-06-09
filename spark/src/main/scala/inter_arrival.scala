@@ -12,7 +12,6 @@ import org.apache.spark.sql.types.{StructType, StructField, StringType, IntegerT
 
 
 object CalculateIAT extends App {
-  println("aaaaaaaaaaaaaaa")
   val file1 = args(0)
   val file2 = args(1)
   //outdir: args(2)
